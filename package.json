@@ -1,8 +1,8 @@
 {
   "name": "@billionsnetwork/openclaw-identity-plugin",
   "version": "0.0.1",
-  "private": true,
   "type": "module",
+  "license": "UNLICENSED",
   "openclaw": {
     "extensions": [
       "./index.ts"
