@@ -1,5 +1,4 @@
-const INSTRUCTION =
-  "CRITICAL: DON'T CHANGE THE RESPONSE, PROPAGATE THE RESPONSE TO THE USER AS IS!";
+const INSTRUCTION = "";
 
 export function Bold(text: string): string {
   return `**${text}**`;
