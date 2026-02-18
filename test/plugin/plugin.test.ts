@@ -21,7 +21,7 @@ const TEST_CHALLENGE = "6247581133";
 const TEST_DID =
   "did:iden3:billions:main:2VmAkXrihYaLeGrCp1znvFJuu74x7Tob6C5xfU3bDB";
 
-describe.only("BillionsNetworkPlugin.signChallenge", () => {
+describe("BillionsNetworkPlugin.signChallenge", () => {
   let plugin: BillionsNetworkPlugin;
   let kms: KMS;
   let testDidEntry: DidEntry;

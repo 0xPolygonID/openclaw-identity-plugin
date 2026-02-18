@@ -1,6 +1,6 @@
 {
-  "name": "billions",
-  "version": "0.1.0",
+  "name": "@billionsnetwork/openclaw-identity-plugin",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "openclaw": {
