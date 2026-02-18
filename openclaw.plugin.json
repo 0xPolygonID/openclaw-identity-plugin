@@ -1,8 +1,8 @@
 {
-  "id": "billions",
+  "id": "openclaw-identity-plugin",
   "name": "Billions Agent Identity Plugin",
   "description": "Manage decentralized identities (DIDs) and authenticate using the Iden3 protocol. Create proofs and verify identity ownership.",
-  "version": "0.1.0",
+  "version": "0.0.2",
   "skills": [
     "./skills/billions"
   ],
