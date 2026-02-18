@@ -1,139 +1,228 @@
 import { Type } from "@sinclair/typebox";
-import { Wallet } from "ethers";
 import {
   setRuntime,
-  getRuntime,
-  setIden3Runtime,
-  getIden3Runtime,
+  setBillionsNetworkPlugin,
+  getBillionsNetworkRuntime,
 } from "./src/runtime";
+import { DidEntry } from "./src/storage/did";
+import {
+  ResponseAiInstruction,
+  CommandResponse,
+  MultiContentResponseAiInstruction,
+  Monospace,
+  Monoblock,
+} from "./src/utils/response";
 
 type OpenClawApi = any;
+
+function convertErrorToMessage(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return String(err);
+}
 
 export default function (api: OpenClawApi) {
   // register runtimes
   setRuntime(api.runtime);
-  setIden3Runtime();
+  setBillionsNetworkPlugin();
 
-  // 1. Register Tool (for the AI/Agent)
-  // api.registerTool(
-  //   {
-  //     name: "eth_sign_challenge",
-  //     description:
-  //       "Sign a challenge string with an Ethereum private key (EIP-191 personal_sign). Returns address + signature.",
-  //     parameters: Type.Object({
-  //       challenge: Type.String({
-  //         description:
-  //           "The exact challenge string to sign (will be signed as a UTF-8 message).",
-  //       }),
-  //     }),
-  //     async execute(_id: string, params: { challenge: string }) {
-  //       // Correct way to get config in tools
-  //       const cfg = api.plugin?.config;
-  //       const privateKey: string | undefined = cfg?.privateKey;
+  api.registerTool({
+    name: "prove_identity_generate_challenge",
+    descirption:
+      "Generate a random challenge for identity verification. Use this when you need to verify that someone owns a DID. The generated challenge must be sent to the user/agent to sign, then verified with `verify_identity_proof`. This is Step 1 of the verification flow.",
+    parameters: Type.Object({
+      did: Type.String(),
+    }),
+    async execute(_id, params) {
+      const { did } = params;
+      if (!did) {
+        return ResponseAiInstruction("DID is required to generate challenge");
+      }
 
-  //       if (!privateKey) {
-  //         return {
-  //           content: [
-  //             {
-  //               type: "text",
-  //               text: "eth-sign plugin is not configured. Check privateKey in openclaw.json.",
-  //             },
-  //           ],
-  //         };
-  //       }
+      let challenge: string;
+      try {
+        challenge = await getBillionsNetworkRuntime().generateChallenge(did);
+      } catch (err) {
+        return ResponseAiInstruction(
+          `Error generating challenge for ${did}: ${convertErrorToMessage(err)}`,
+        );
+      }
 
-  //       const wallet = new Wallet(privateKey);
-  //       const signature = await wallet.signMessage(params.challenge);
-  //       const result = {
-  //         address: await wallet.getAddress(),
-  //         signature,
-  //         challenge: params.challenge,
-  //       };
+      return ResponseAiInstruction(
+        `Challenge for ${did}: ${Monospace(challenge)}`,
+      );
+    },
+  });
 
-  //       return {
-  //         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-  //       };
-  //     },
-  //   },
-  //   { optional: true },
-  // );
+  api.registerTool({
+    name: "verify_identity_proof",
+    descirption:
+      "Verify a signed challenge to confirm DID ownership. Use this after receiving a signed response from `prove_identity_generate_challenge`. Provide the DID, original challenge, and signature (JWS token). If verification succeeds, you can trust the user owns the DID. This is Step 2 of the verification flow.",
+    parameters: Type.Object({
+      did: Type.String(),
+      token: Type.String(),
+    }),
+    async execute(_id, params) {
+      const { did, token } = params;
+      if (!did || !token) {
+        return ResponseAiInstruction(
+          "DID and token are required to verify challenge response",
+        );
+      }
 
-  // 2. Register Command (for the CLI and Slash Commands)
-  // api.registerCommand({
-  //   name: "sign",
-  //   description: "Sign a message with the Ethereum key.",
-  //   acceptsArgs: true,
-  //   handler: async (ctx: any) => {
-  //     try {
-  //       console.log("[eth-sign] Handler triggered");
+      try {
+        await getBillionsNetworkRuntime().verifySignature(did, token);
 
-  //       // Robust message extraction
-  //       let message = "";
-  //       if (typeof ctx.text === "string" && ctx.text.length > 0) {
-  //         message = ctx.text;
-  //       } else if (typeof ctx.rest === "string" && ctx.rest.length > 0) {
-  //         message = ctx.rest;
-  //       } else if (Array.isArray(ctx.args)) {
-  //         message = ctx.args.join(" ");
-  //       } else if (ctx.args && typeof ctx.args === "string") {
-  //         message = ctx.args;
-  //       }
+        return ResponseAiInstruction(
+          `Challenge response for ${did} is valid. User owns the DID.`,
+        );
+      } catch (err) {
+        console.log("Error verifying challenge response:", err, { did, token });
+        return ResponseAiInstruction(
+          `Error verifying challenge response for ${did}: ${convertErrorToMessage(err)}`,
+        );
+      }
+    },
+  });
 
-  //       console.log("[eth-sign] Final message to sign:", message);
+  api.registerTool({
+    name: "prove_identity",
+    description:
+      "Sign a challenge with the agent's own DID to prove identity ownership. Use this when another agent/user asks you to prove you own a specific DID. The challenge should come from their `prove_identity_generate_challenge` call. This creates a JWS token as proof.",
+    parameters: Type.Object({
+      challenge: Type.String(),
+      did: Type.Optional(Type.String()),
+    }),
+    async execute(_id, params) {
+      let { challenge, did } = params;
+      if (!challenge) {
+        return ResponseAiInstruction("Challenge is required to prove identity");
+      }
+      did = did.trim() ?? "";
+      let didDocument: any;
+      try {
+        didDocument = await getBillionsNetworkRuntime().getDidDocument(did);
+      } catch (err) {
+        console.error("Error fetching DID Document:", err, did);
+        return ResponseAiInstruction(
+          `Error fetching DID Document for ${did}: ${convertErrorToMessage(err)}`,
+        );
+      }
 
-  //       if (!message) {
-  //         if (ctx.reply) return await ctx.reply("Usage: /sign <message>");
-  //         throw new Error("Missing message to sign.");
-  //       }
+      const signature = await getBillionsNetworkRuntime().signChallenge(
+        challenge,
+        did,
+      );
+      return MultiContentResponseAiInstruction(
+        `DID Document:${Monoblock(JSON.stringify(didDocument, null, 2), true, true)}`,
+        `Signature:${Monoblock(signature, true, true)}`,
+      );
+    },
+  });
 
-  //       // Correct way to get config as per OpenClaw docs
-  //       const cfg = api.runtime.config.loadConfig();
-  //       console.log(cfg);
-  //       const privateKey = (
-  //         cfg?.plugins?.entries?.["eth-sign"]?.config?.privateKey ?? ""
-  //       ).trim();
+  api.registerCommand({
+    name: "identity_list",
+    description: "List all BillionsNetwork identities",
+    acceptsArgs: true,
+    handler: async (ctx: any) => {
+      let identities: DidEntry[] = [];
+      try {
+        identities = await getBillionsNetworkRuntime().getIdentities();
+        if (identities.length === 0) {
+          return CommandResponse("No identities found.");
+        }
+      } catch (err) {
+        return CommandResponse(
+          `Error fetching identities: ${convertErrorToMessage(err)}`,
+        );
+      }
 
-  //       if (!privateKey) {
-  //         throw new Error("Missing privateKey in plugin configuration.");
-  //       }
+      const output = identities
+        .map((identity: DidEntry) => {
+          return identity.isDefault
+            ? `- ${identity.did} <- Default`
+            : `- ${identity.did}`;
+        })
+        .join("\n");
+      return CommandResponse("Bot's BillionsNetwork identities:", output);
+    },
+  });
 
-  //       const wallet = new Wallet(privateKey);
-  //       const signature = await wallet.signMessage(message);
-  //       const address = await wallet.getAddress();
+  api.registerCommand({
+    name: "identity_did_document",
+    description:
+      "Get DID Document for a BillionsNetwork identity. If argsis empty, returns DID Document for default identity.",
+    acceptsArgs: true,
+    handler: async (ctx: any) => {
+      const args: string = ctx.args ?? "";
+      const inputDid = args.trim().split(" ")[0]; // Take only the first argument as DID
 
-  //       const result = { address, signature, message };
-  //       const output = JSON.stringify(result, null, 2);
+      let didDocument: any;
+      let did: string;
+      try {
+        ({ didDocument, did } =
+          await getBillionsNetworkRuntime().getDidDocument(inputDid));
+        if (!didDocument) {
+          return CommandResponse("DID Document not found.");
+        }
+      } catch (err) {
+        return CommandResponse(
+          `Error fetching DID Document: ${convertErrorToMessage(err)}`,
+        );
+      }
 
-  //       return { text: output };
+      return CommandResponse(
+        `DID Document for ${did}:${Monoblock(JSON.stringify(didDocument, null, 2), true)}`,
+      );
+    },
+  });
 
-  //       console.log("[eth-sign] Result generated");
+  api.registerCommand({
+    name: "identity_sign_challenge",
+    description:
+      "Sign a challenge string with a BillionsNetwork identity. If DID is not provided as an argument, uses the default identity.",
+    acceptsArgs: true,
+    handler: async (ctx: any) => {
+      let args: string = ctx.args ?? "";
+      const [challenge, inputDid] = args.trim().split(" ");
+      if (!challenge) {
+        return CommandResponse(
+          "Usage: /identity_sign_challenge <challenge> [did]",
+        );
+      }
 
-  //       if (ctx.reply) {
-  //         await ctx.reply(`\`\`\`json\n${output}\n\`\`\``);
-  //       } else {
-  //         console.log(output);
-  //       }
-  //     } catch (err: any) {
-  //       console.error("[eth-sign] Fatal error in handler:", err);
-  //       if (ctx.reply) {
-  //         try {
-  //           await ctx.reply(`Error: ${err.message}`);
-  //         } catch (replyErr) {
-  //           console.error("[eth-sign] Failed to send error reply:", replyErr);
-  //         }
-  //       }
-  //     }
-  //   },
-  // });
+      let signature: string;
+      try {
+        signature = await getBillionsNetworkRuntime().signChallenge(
+          challenge,
+          inputDid ?? "",
+        );
+      } catch (err) {
+        return CommandResponse(
+          `Error signing challenge: ${convertErrorToMessage(err)}`,
+        );
+      }
 
+      return CommandResponse(`Signature:${Monoblock(signature, true)}`);
+    },
+  });
+
+  // registerCli commands can use console.log for output
+  // cli can represent throwed errors directly, so no need to convert them to messages
   api.registerCli(
     ({ program }) => {
-      const iden3Commands = program
-        .command("iden3")
-        .description("Manage Iden3 identities");
-      const keysCommands = iden3Commands
+      const billionsNetworkCommands = program
+        .command("billions")
+        .description("Manage Billions identities");
+
+      const keysCommands = billionsNetworkCommands
         .command("key")
-        .description("Manage Iden3 keys");
+        .description("Manage BillionsNetwork keys");
+
+      const identityCommandsd = billionsNetworkCommands
+        .command("identity")
+        .description("Manage Billions identities");
 
       keysCommands
         .command("add")
@@ -142,18 +231,24 @@ export default function (api: OpenClawApi) {
           "-k, --key <key>",
           "Hex string of the private key to add",
         )
-        .option(
-          "-s, --seed <seed>",
-          "Optional seed for deterministic identity generation",
-        )
         .action(async (options: { key: string; seed?: string }) => {
-          const did = await getIden3Runtime().createNewIdentity(
-            options.key,
-            options.seed,
-          );
+          const did =
+            await getBillionsNetworkRuntime().createNewEthereumIdentity(
+              options.key,
+            );
           console.log(`New identity created: ${did}`);
         });
+
+      identityCommandsd
+        .command("list")
+        .description("List all Billions identities")
+        .action(async () => {
+          const idents = await getBillionsNetworkRuntime().getIdentities();
+          for (const ident of idents) {
+            console.log(ident);
+          }
+        });
     },
-    { commands: ["mycmd"] },
+    { commands: ["billions"] },
   );
 }

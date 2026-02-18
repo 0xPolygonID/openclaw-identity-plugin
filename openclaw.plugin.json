@@ -1,50 +1,15 @@
 {
-  "id": "iden3",
-  "name": "Ethereum Challenge Signer",
-  "description": "Signs an arbitrary challenge string with an Ethereum private key (EIP-191 personal_sign).",
+  "id": "billions",
+  "name": "Billions Agent Identity Plugin",
+  "description": "Manage decentralized identities (DIDs) and authenticate using the Iden3 protocol. Create proofs and verify identity ownership.",
   "version": "0.1.0",
+  "skills": [
+    "./skills/billions"
+  ],
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "properties": {
-      "privateKey": {
-        "type": "string",
-        "minLength": 1,
-        "description": "Ethereum private key hex string (0x...). Prefer using a dedicated hot key with minimal funds/permissions."
-      }
-    },
-    "required": [
-      "privateKey"
-    ]
+    "properties": {}
   },
-  "uiHints": {
-    "privateKey": {
-      "label": "Ethereum Private Key",
-      "placeholder": "0x…",
-      "sensitive": true
-    }
-  },
-  "cli": {
-    "command": "iden3",
-    "commands": [
-      {
-        "name": "key",
-        "description": "Create a new identity",
-        "parameters": [
-          {
-            "name": "privateKey",
-            "type": "string",
-            "description": "Ethereum private key hex string (0x...). Prefer using a dedicated hot key with minimal funds/permissions.",
-            "required": true
-          },
-          {
-            "name": "seed",
-            "type": "string",
-            "description": "Optiona lseed for deterministic key generation (e.g. from a mnemonic). If provided, the same private key will be generated for the same seed.",
-            "required": false
-          }
-        ]
-      }
-    ]
-  }
+  "uiHints": {}
 }
