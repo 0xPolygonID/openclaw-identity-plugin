@@ -99,7 +99,7 @@ export default function (api: OpenClawApi) {
       if (!challenge) {
         return ResponseAiInstruction("Challenge is required to prove identity");
       }
-      did = did.trim() ?? "";
+      did = did?.trim() ?? "";
       let didDocument: any;
       try {
         didDocument = await getBillionsNetworkRuntime().getDidDocument(did);
