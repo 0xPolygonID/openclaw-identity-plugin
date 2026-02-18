@@ -35,6 +35,10 @@ This plugin brings Billions identity features to OpenClaw AI agents, so they can
 
 1. Install the plugin in your OpenClaw workspace:
 
+```bash
+openclaw plugins install @billionsnetwork/openclaw-identity-plugin@0.0.2
+```
+
 2. Enable Billions plugin in OpenClaw configuration:
 
 ```
