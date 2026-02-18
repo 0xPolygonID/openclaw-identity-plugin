@@ -49,7 +49,7 @@ openclaw plugins install @billionsnetwork/openclaw-identity-plugin@0.0.2
     "plugins": {
         "allow": [
             ...
-            "billions"
+            "openclaw-identity-plugin"
         ]
     }
 ```
